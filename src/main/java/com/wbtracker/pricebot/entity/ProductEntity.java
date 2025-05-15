@@ -50,6 +50,10 @@ public class ProductEntity {
     @Column(name = "currency", nullable = false, length = 10)
     private CurrencyCode currency;
 
+    @Column(name = "original_url", nullable = false)
+    private String originalUrl;
+
+
     @Override
     public final boolean equals(Object o) {
         if (this == o) return true;

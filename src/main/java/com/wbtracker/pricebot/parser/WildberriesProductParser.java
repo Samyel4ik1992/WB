@@ -50,7 +50,9 @@ public class WildberriesProductParser {
                     .salePrice(salePrice)
                     .rating(rating)
                     .currency(CurrencyCode.RUB)
+                    .originalUrl(url) // сохраняем
                     .build();
+
 
         } catch (IOException e) {
             throw new RuntimeException("Ошибка при получении данных с WB JSON API", e);
