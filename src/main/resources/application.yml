@@ -1,0 +1,29 @@
+spring:
+  application:
+    name: priceBot
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/pricebot
+    username: postgres
+    password: 1111
+
+    hikari:                  # Настройки пула соединений HikariCP (по умолчанию в Spring Boot)
+      connection-timeout: 2000       # Максимальное время ожидания подключения (2 секунды)
+      maximum-pool-size: 10          # Максимальное количество соединений в пуле
+      minimum-idle: 1                # Минимальное количество соединений в режиме простоя
+      validation-timeout: 1000       # Время ожидания при проверке соединения (1 секунда)
+      idle-timeout: 30000            # Максимальное время простоя соединения перед его удалением (30 сек)
+      max-lifetime: 60000            # Максимальное время жизни соединения (60 сек) — полезно, если БД разрывает старые соединения
+
+  jpa:
+    hibernate:
+      ddl-auto: create               # При старте пересоздаёт таблицы (удаляет старые!) — использовать только в dev
+    show-sql: true                   # Показывать SQL-запросы в консоли
+    open-in-view: false              # Закрывать EntityManager после контроллера — улучшает производительность и предотвращает утечки
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml  # Путь к главному changelog-файлу Liquibase (если используешь миграции)
+
+  docker:
+    compose:
+      enabled: false                 # Отключает автозапуск Docker Compose (если используешь Spring Boot с Docker Compose plugin)

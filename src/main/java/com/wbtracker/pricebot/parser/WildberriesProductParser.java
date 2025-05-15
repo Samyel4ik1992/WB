@@ -9,68 +9,60 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.springframework.stereotype.Component;
 
+import java.io.IOException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @Slf4j
 @Component
-public class WildberriesProductParser implements ProductParser {
+public class WildberriesProductParser {
 
-    private static final Pattern WB_JSON_PATTERN =
-            Pattern.compile("window\\.__WB_DATA__\\s*=\\s*(\\{.*?\\});", Pattern.DOTALL);
+    private static final ObjectMapper objectMapper = new ObjectMapper();
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
-
-    @Override
     public ProductDto parseFromLink(String url) {
         try {
-            Document doc = Jsoup.connect(url)
+            Long nmId = extractNmIdFromUrl(url);
+
+            String apiUrl = "https://card.wb.ru/cards/v1/detail?appType=1&curr=rub&dest=-1257786&nm=" + nmId;
+
+            Document jsonDoc = Jsoup.connect(apiUrl)
+                    .ignoreContentType(true)
                     .userAgent("Mozilla/5.0")
-                    .timeout(10000)
                     .get();
 
-            Matcher matcher = WB_JSON_PATTERN.matcher(doc.html());
-            if (!matcher.find()) {
-                log.warn("Не найден JSON-блок на странице: {}", url);
-                throw new RuntimeException("WB JSON not found");
+            String json = jsonDoc.body().text();
+            JsonNode root = objectMapper.readTree(json);
+            JsonNode product = root.at("/data/products/0");
+
+            if (product.isMissingNode()) {
+                throw new IllegalArgumentException("Продукт не найден в JSON по ссылке: " + url);
             }
 
-            String json = matcher.group(1);
-            JsonNode rootNode = objectMapper.readTree(json);
-            JsonNode productNode = rootNode.path("product");
+            String name = product.get("name").asText();
+            int price = product.get("priceU").asInt() / 100;
+            int salePrice = product.get("salePriceU").asInt() / 100;
+            double rating = product.path("reviewRating").asDouble(0.0);
 
-            if (productNode.isMissingNode() || productNode.isEmpty()) {
-                log.warn("Не удалось найти 'product' в JSON для URL: {}", url);
-                throw new RuntimeException("Invalid product JSON structure");
-            }
+            return ProductDto.builder()
+                    .nmId(nmId)
+                    .name(name)
+                    .price(price)
+                    .salePrice(salePrice)
+                    .rating(rating)
+                    .currency(CurrencyCode.RUB)
+                    .build();
 
-            CurrencyCode currency = extractCurrencyFromUrl(url);
-
-            ProductDto dto = new ProductDto();
-            dto.setNmId(productNode.path("id").asLong());
-            dto.setName(productNode.path("name").asText(""));
-            dto.setPrice(productNode.path("priceU").asInt(0) / 100);
-            dto.setSalePrice(productNode.path("salePriceU").asInt(0) / 100);
-            dto.setRating(productNode.path("reviewRating").asDouble(0.0));
-            dto.setCurrency(currency);
-
-            log.info("Успешно спарсен товар: {} ({}): {} -> {} {}",
-                    dto.getNmId(), dto.getName(), dto.getPrice(), dto.getSalePrice(), currency);
-
-            return dto;
-
-        } catch (Exception e) {
-            log.error("Ошибка при парсинге WB-страницы: {}", url, e);
-            throw new RuntimeException("Ошибка при обработке Wildberries-ссылки", e);
+        } catch (IOException e) {
+            throw new RuntimeException("Ошибка при получении данных с WB JSON API", e);
         }
     }
 
-    private CurrencyCode extractCurrencyFromUrl(String url) {
-        if (url.contains(".ru")) return CurrencyCode.RUB;
-        if (url.contains(".by")) return CurrencyCode.BYN;
-        if (url.contains(".kz")) return CurrencyCode.KZT;
-        if (url.contains(".uz")) return CurrencyCode.UZS;
-        if (url.contains(".am")) return CurrencyCode.AMD;
-        return CurrencyCode.UNKNOWN;
+    private Long extractNmIdFromUrl(String url) {
+        Pattern pattern = Pattern.compile("/catalog/(\\d+)/");
+        Matcher matcher = pattern.matcher(url);
+        if (matcher.find()) {
+            return Long.parseLong(matcher.group(1));
+        }
+        throw new IllegalArgumentException("Не удалось извлечь nmId из URL: " + url);
     }
 }
